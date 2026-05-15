@@ -1,4 +1,4 @@
-name: Build 32-bit + 64-bit Universal APK
+name: Build + Release (32-bit + 64-bit)
 
 on:
   push:
@@ -34,39 +34,45 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Build Flutter APK (all ABIs)
+      - name: Build Flutter APK (split per ABI)
         run: flutter build apk --split-per-abi
 
-      - name: Download 1.9.4 libmpv (ARM64 compat)
+      - name: Download 1.9.4 APK for ARM64 libmpv
         run: |
-          curl -skL -o kazumi_194_arm64.apk \
+          curl -skL -o old_194.apk \
             "https://github.com/Predidit/Kazumi/releases/download/1.9.4/Kazumi_android_1.9.4.apk"
-          unzip -o kazumi_194_arm64.apk "lib/arm64-v8a/libmpv.so" "lib/arm64-v8a/libmediakitandroidhelper.so" -d old_libs/
+          unzip -o old_194.apk "lib/arm64-v8a/libmpv.so" "lib/arm64-v8a/libmediakitandroidhelper.so" -d old_libs/
 
-      - name: Merge 32-bit + 64-bit with old libmpv into fat APK
+      - name: Swap ARM64 libmpv with 1.9.4 compatible version
         run: |
-          mkdir -p merged/lib/armeabi-v7a merged/lib/arm64-v8a
-          unzip -o build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk -d merged/
-          unzip -o build/app/outputs/flutter-apk/app-arm64-v8a-release.apk -d merged/
-          cp old_libs/lib/arm64-v8a/libmpv.so merged/lib/arm64-v8a/
-          cp old_libs/lib/arm64-v8a/libmediakitandroidhelper.so merged/lib/arm64-v8a/
-          cd merged && zip -r ../Kazumi_universal.apk . && cd ..
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Kazumi_arm64.apk
+          zip -d Kazumi_arm64.apk lib/arm64-v8a/libmpv.so
+          zip -d Kazumi_arm64.apk lib/arm64-v8a/libmediakitandroidhelper.so
+          mkdir -p libswap/lib/arm64-v8a
+          cp old_libs/lib/arm64-v8a/libmpv.so libswap/lib/arm64-v8a/
+          cp old_libs/lib/arm64-v8a/libmediakitandroidhelper.so libswap/lib/arm64-v8a/
+          cd libswap && zip -r ../Kazumi_arm64.apk lib/ && cd ..
 
-      - name: Sign APK
+      - name: Copy 32-bit APK
+        run: cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Kazumi_arm32.apk
+
+      - name: Sign APKs
         run: |
           keytool -genkey -v -keystore debug.keystore -alias debug \
             -keyalg RSA -keysize 2048 -validity 365 \
             -storepass android -keypass android \
             -dname "CN=Debug" -noprompt
-          find $ANDROID_HOME/build-tools -name apksigner | head -1 | xargs -I {} {} sign \
-            --ks debug.keystore --ks-pass pass:android --key-pass pass:android \
-            Kazumi_universal.apk
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | head -1)
+          $APKSIGNER sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android Kazumi_arm64.apk
+          $APKSIGNER sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android Kazumi_arm32.apk
 
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Kazumi_universal
-          path: Kazumi_universal.apk
+          name: Kazumi_APKs
+          path: |
+            Kazumi_arm64.apk
+            Kazumi_arm32.apk
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -77,15 +83,19 @@ jobs:
             ## 基于 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) v2.1.1
 
             ### 新增支持
-            - 32位 ARM (armeabi-v7a) + 64位 ARM 双ABI同包
+            - 32位 ARM (armeabi-v7a) + 64位 ARM 双ABI
             - Android 8.1 (SDK 27) 及以上老系统兼容
             - 骁龙450 / MT6765 等老SOC实测通过
             - 解锁特摄剧标签搜索（假面骑士、奥特曼等）
 
             ### 修改内容
-            - 32位 + 64位双ABI同包，自动匹配
             - Android 11 及以下设备隐藏Vulkan选项，自动回退OpenGL
             - arm64 注入兼容版 libmpv，修复由于过老的SOC不适配的兼容性问题而导致的白屏
+            - 搜索支持特摄剧（假面骑士、奥特曼等）
+
+            ### 下载
+            - **Kazumi_arm64.apk** — 64位设备（含Android 8.1老SOC修复）
+            - **Kazumi_arm32.apk** — 32位设备
 
             ### 运行要求
             - 推荐 Android 8.1 (SDK 27) 及以上
@@ -100,6 +110,8 @@ jobs:
 
             ### 鸣谢
             原项目 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) · 弹幕服务 DanDanPlay API
-          files: Kazumi_universal.apk
+          files: |
+            Kazumi_arm64.apk
+            Kazumi_arm32.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
