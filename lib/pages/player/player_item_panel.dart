@@ -24,6 +24,7 @@ import 'package:kazumi/pages/download/download_controller.dart';
 class PlayerItemPanel extends StatefulWidget {
   const PlayerItemPanel({
     super.key,
+    required this.playerController,
     required this.onBackPressed,
     required this.setPlaybackSpeed,
     required this.showDanmakuSwitch,
@@ -50,6 +51,7 @@ class PlayerItemPanel extends StatefulWidget {
     this.disableAnimations = false,
   });
 
+  final PlayerController playerController;
   final void Function(BuildContext) onBackPressed;
   final Future<void> Function(double) setPlaybackSpeed;
   final void Function() showDanmakuSwitch;
@@ -87,7 +89,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
   late Animation<Offset> leftOffsetAnimation;
   final VideoPageController videoPageController =
       Modular.get<VideoPageController>();
-  final PlayerController playerController = Modular.get<PlayerController>();
+  late final PlayerController playerController;
   final DownloadController downloadController =
       Modular.get<DownloadController>();
   final TextEditingController textController = TextEditingController();
@@ -114,11 +116,12 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
         controller: textController,
         textAlignVertical: TextAlignVertical.center,
         decoration: InputDecoration(
-          enabled: playerController.danmakuOn,
+          enabled: playerController.danmaku.danmakuOn,
           filled: true,
           fillColor: Colors.white38,
           floatingLabelBehavior: FloatingLabelBehavior.never,
-          hintText: playerController.danmakuOn ? '发个友善的弹幕见证当下' : '已关闭弹幕',
+          hintText:
+              playerController.danmaku.danmakuOn ? '发个友善的弹幕见证当下' : '已关闭弹幕',
           hintStyle: TextStyle(
               fontSize: Utils.isDesktop() ? 15 : 13, color: Colors.white60),
           alignLabelWithHint: true,
@@ -141,10 +144,10 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                   textController.clear();
                 },
                 style: TextButton.styleFrom(
-                  foregroundColor: playerController.danmakuOn
+                  foregroundColor: playerController.danmaku.danmakuOn
                       ? Theme.of(context).colorScheme.onPrimaryContainer
                       : Colors.white60,
-                  backgroundColor: playerController.danmakuOn
+                  backgroundColor: playerController.danmaku.danmakuOn
                       ? Theme.of(context).colorScheme.primaryContainer
                       : Theme.of(context).disabledColor,
                   shape: RoundedRectangleBorder(
@@ -160,20 +163,20 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
         onTapAlwaysCalled: true,
         onTap: () {
           widget.cancelHideTimer();
-          playerController.canHidePlayerPanel = false;
+          playerController.panel.canHidePlayerPanel = false;
         },
         onSubmitted: (msg) {
           textFieldFocus.unfocus();
           widget.showDanmakuDestinationPickerAndSend(msg);
           widget.cancelHideTimer();
           widget.startHideTimer();
-          playerController.canHidePlayerPanel = true;
+          playerController.panel.canHidePlayerPanel = true;
           textController.clear();
         },
         onTapOutside: (_) {
           widget.cancelHideTimer();
           widget.startHideTimer();
-          playerController.canHidePlayerPanel = true;
+          playerController.panel.canHidePlayerPanel = true;
           textFieldFocus.unfocus();
           widget.keyboardFocus.requestFocus();
         },
@@ -183,7 +186,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
 
   // 选择倍速
   void showSetSpeedSheet() {
-    final double currentSpeed = playerController.playerSpeed;
+    final double currentSpeed = playerController.playback.playerSpeed;
     KazumiDialog.show(builder: (context) {
       return AlertDialog(
         title: const Text('播放速度'),
@@ -248,7 +251,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
             decoration: InputDecoration(
               floatingLabelBehavior:
                   FloatingLabelBehavior.never, // 控制label的显示方式
-              labelText: playerController.buttonSkipTime.toString(),
+              labelText: playerController.playback.buttonSkipTime.toString(),
             ),
             onChanged: (value) {
               input = value;
@@ -282,6 +285,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
   @override
   void initState() {
     super.initState();
+    playerController = widget.playerController;
     topOffsetAnimation = Tween<Offset>(
       begin: const Offset(0.0, -1.0),
       end: const Offset(0.0, 0.0),
@@ -348,7 +352,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
   Widget _buildDanmakuToggleButton(BuildContext context) {
     return IconButton(
       color: Colors.white,
-      icon: playerController.danmakuLoading
+      icon: playerController.danmaku.danmakuLoading
           ? SizedBox(
               width: _danmakuIconSize,
               height: _danmakuIconSize,
@@ -356,23 +360,23 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                 strokeWidth: _loadingIndicatorStrokeWidth,
               ),
             )
-          : (playerController.danmakuOn
+          : (playerController.danmaku.danmakuOn
               ? danmakuOnIcon(context)
               : cachedDanmakuOffIcon!),
-      onPressed: playerController.danmakuLoading
+      onPressed: playerController.danmaku.danmakuLoading
           ? null
           : () {
               widget.handleDanmaku();
             },
-      tooltip: playerController.danmakuLoading
+      tooltip: playerController.danmaku.danmakuLoading
           ? '弹幕加载中...'
-          : (playerController.danmakuOn ? '关闭弹幕' : '打开弹幕'),
+          : (playerController.danmaku.danmakuOn ? '关闭弹幕' : '打开弹幕'),
     );
   }
 
   Widget forwardIcon() {
     return Tooltip(
-      message: '快进${playerController.buttonSkipTime}秒，长按修改时间',
+      message: '快进${playerController.playback.buttonSkipTime}秒，长按修改时间',
       child: GestureDetector(
         onLongPress: () => showForwardChange(),
         child: IconButton(
@@ -401,9 +405,9 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
           right: 0,
           child: Observer(builder: (context) {
             return Visibility(
-              visible: !playerController.lockPanel &&
+              visible: !playerController.panel.lockPanel &&
                   (widget.disableAnimations
-                      ? playerController.showVideoController
+                      ? playerController.panel.showVideoController
                       : true),
               child: widget.disableAnimations
                   ? Container(
@@ -445,9 +449,9 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
           right: 0,
           child: Observer(builder: (context) {
             return Visibility(
-              visible: !playerController.lockPanel &&
+              visible: !playerController.panel.lockPanel &&
                   (widget.disableAnimations
-                      ? playerController.showVideoController
+                      ? playerController.panel.showVideoController
                       : true),
               child: widget.disableAnimations
                   ? Container(
@@ -485,7 +489,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
         Positioned(
             top: 25,
             child: Observer(builder: (context) {
-              return playerController.showSeekTime
+              return playerController.panel.showSeekTime
                   ? Wrap(
                       alignment: WrapAlignment.center,
                       children: <Widget>[
@@ -496,11 +500,12 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                             borderRadius: BorderRadius.circular(8.0),
                           ),
                           child: Text(
-                            playerController.currentPosition.compareTo(
-                                        playerController.playerPosition) >
+                            playerController.playback.currentPosition.compareTo(
+                                        playerController
+                                            .playback.playerPosition) >
                                     0
-                                ? '快进 ${playerController.currentPosition.inSeconds - playerController.playerPosition.inSeconds} 秒'
-                                : '快退 ${playerController.playerPosition.inSeconds - playerController.currentPosition.inSeconds} 秒',
+                                ? '快进 ${playerController.playback.currentPosition.inSeconds - playerController.playback.playerPosition.inSeconds} 秒'
+                                : '快退 ${playerController.playback.playerPosition.inSeconds - playerController.playback.currentPosition.inSeconds} 秒',
                             style: const TextStyle(
                               color: Colors.white,
                             ),
@@ -513,7 +518,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
         Positioned(
             top: 25,
             child: Observer(builder: (context) {
-              return playerController.showPlaySpeed
+              return playerController.panel.showPlaySpeed
                   ? Wrap(
                       alignment: WrapAlignment.center,
                       children: <Widget>[
@@ -542,7 +547,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
         Positioned(
             top: 25,
             child: Observer(builder: (context) {
-              return playerController.showBrightness
+              return playerController.panel.showBrightness
                   ? Wrap(
                       alignment: WrapAlignment.center,
                       children: <Widget>[
@@ -557,7 +562,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                                 const Icon(Icons.brightness_7,
                                     color: Colors.white),
                                 Text(
-                                  ' ${(playerController.brightness * 100).toInt()} %',
+                                  ' ${(playerController.panel.brightness * 100).toInt()} %',
                                   style: const TextStyle(
                                     color: Colors.white,
                                   ),
@@ -571,7 +576,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
         Positioned(
             top: 25,
             child: Observer(builder: (context) {
-              return playerController.showVolume
+              return playerController.panel.showVolume
                   ? Wrap(
                       alignment: WrapAlignment.center,
                       children: <Widget>[
@@ -586,7 +591,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                                 const Icon(Icons.volume_down,
                                     color: Colors.white),
                                 Text(
-                                  ' ${playerController.volume.toInt()}%',
+                                  ' ${playerController.playback.volume.toInt()}%',
                                   style: const TextStyle(
                                     color: Colors.white,
                                   ),
@@ -606,7 +611,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                 child: Observer(builder: (context) {
                   return Visibility(
                     visible: widget.disableAnimations
-                        ? playerController.showVideoController
+                        ? playerController.panel.showVideoController
                         : true,
                     child: widget.disableAnimations
                         ? leftControlWidget
@@ -622,9 +627,9 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
           right: 0,
           child: Observer(builder: (context) {
             return Visibility(
-              visible: !playerController.lockPanel &&
+              visible: !playerController.panel.lockPanel &&
                   (widget.disableAnimations
-                      ? playerController.showVideoController
+                      ? playerController.panel.showVideoController
                       : true),
               child: widget.disableAnimations
                   ? topControlWidget
@@ -639,9 +644,9 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
           right: 0,
           child: Observer(builder: (context) {
             return Visibility(
-              visible: !playerController.lockPanel &&
+              visible: !playerController.panel.lockPanel &&
                   (widget.disableAnimations
-                      ? playerController.showVideoController
+                      ? playerController.panel.showVideoController
                       : true),
               child: widget.disableAnimations
                   ? bottomControlWidget
@@ -664,7 +669,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
         right: videoPageController.isFullscreen,
         child: MouseRegion(
           cursor: (videoPageController.isFullscreen &&
-                  !playerController.showVideoController)
+                  !playerController.panel.showVideoController)
               ? SystemMouseCursors.none
               : SystemMouseCursors.basic,
           onEnter: (_) {
@@ -681,7 +686,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                 Container(
                   padding: const EdgeInsets.only(left: 10.0, bottom: 10),
                   child: Text(
-                    "${Utils.durationToString(playerController.currentPosition)} / ${Utils.durationToString(playerController.duration)}",
+                    "${Utils.durationToString(playerController.playback.currentPosition)} / ${Utils.durationToString(playerController.playback.duration)}",
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12.0,
@@ -706,17 +711,19 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                       FontFeature.tabularFigures(),
                     ],
                   ),
-                  progress: playerController.currentPosition,
-                  buffered: playerController.buffer,
-                  total: playerController.duration,
+                  progress: playerController.playback.currentPosition,
+                  buffered: playerController.playback.buffer,
+                  total: playerController.playback.duration,
                   onSeek: (duration) {
                     playerController.seek(duration);
                   },
                   onDragStart: (details) {
                     widget.handleProgressBarDragStart(details);
                   },
-                  onDragUpdate: (details) =>
-                      {playerController.currentPosition = details.timeStamp},
+                  onDragUpdate: (details) => {
+                    playerController.playback.currentPosition =
+                        details.timeStamp
+                  },
                   onDragEnd: () {
                     widget.handleProgressBarDragEnd();
                   },
@@ -728,10 +735,10 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                   children: [
                     IconButton(
                       color: Colors.white,
-                      icon: Icon(playerController.playing
+                      icon: Icon(playerController.playback.playing
                           ? Icons.pause_rounded
                           : Icons.play_arrow_rounded),
-                      tooltip: playerController.playing ? '暂停' : '播放',
+                      tooltip: playerController.playback.playing ? '暂停' : '播放',
                       onPressed: () {
                         playerController.playOrPause();
                       },
@@ -750,7 +757,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                       Container(
                         padding: const EdgeInsets.only(left: 10.0),
                         child: Text(
-                          "${Utils.durationToString(playerController.currentPosition)} / ${Utils.durationToString(playerController.duration)}",
+                          "${Utils.durationToString(playerController.playback.currentPosition)} / ${Utils.durationToString(playerController.playback.duration)}",
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16.0,
@@ -797,7 +804,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                                             return DanmakuSettingsSheet(
                                               danmakuController:
                                                   playerController
-                                                      .danmakuController,
+                                                      .danmaku.canvasController,
                                               onUpdateDanmakuSpeed:
                                                   playerController
                                                       .updateDanmakuSpeed,
@@ -818,15 +825,17 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                     if (!Utils.isDesktop()) ...[
                       IconButton(
                         color: Colors.white,
-                        icon: playerController.danmakuOn
+                        icon: playerController.danmaku.danmakuOn
                             ? danmakuOnIcon(context)
                             : cachedDanmakuOffIcon!,
                         onPressed: () {
                           widget.handleDanmaku();
                         },
-                        tooltip: playerController.danmakuOn ? '关闭弹幕' : '打开弹幕',
+                        tooltip: playerController.danmaku.danmakuOn
+                            ? '关闭弹幕'
+                            : '打开弹幕',
                       ),
-                      if (playerController.danmakuOn) ...[
+                      if (playerController.danmaku.danmakuOn) ...[
                         IconButton(
                           onPressed: () {
                             showModalBottomSheet(
@@ -846,8 +855,8 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                                 context: context,
                                 builder: (context) {
                                   return DanmakuSettingsSheet(
-                                    danmakuController:
-                                        playerController.danmakuController,
+                                    danmakuController: playerController
+                                        .danmaku.canvasController,
                                     onUpdateDanmakuSpeed:
                                         playerController.updateDanmakuSpeed,
                                   );
@@ -859,19 +868,19 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                         ),
                         Expanded(child: danmakuTextField),
                       ],
-                      if (!playerController.danmakuOn) const Spacer(),
+                      if (!playerController.danmaku.danmakuOn) const Spacer(),
                     ],
                     // 超分辨率
                     MenuAnchor(
                       consumeOutsideTap: true,
                       onOpen: () {
                         widget.cancelHideTimer();
-                        playerController.canHidePlayerPanel = false;
+                        playerController.panel.canHidePlayerPanel = false;
                       },
                       onClose: () {
                         widget.cancelHideTimer();
                         widget.startHideTimer();
-                        playerController.canHidePlayerPanel = true;
+                        playerController.panel.canHidePlayerPanel = true;
                       },
                       builder: (BuildContext context, MenuController controller,
                           Widget? child) {
@@ -906,7 +915,8 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                                         ? '效率档'
                                         : '质量档',
                                 style: TextStyle(
-                                  color: playerController.superResolutionType ==
+                                  color: playerController
+                                              .playback.superResolutionType ==
                                           index + 1
                                       ? Theme.of(context).colorScheme.primary
                                       : null,
@@ -922,12 +932,12 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                       consumeOutsideTap: true,
                       onOpen: () {
                         widget.cancelHideTimer();
-                        playerController.canHidePlayerPanel = false;
+                        playerController.panel.canHidePlayerPanel = false;
                       },
                       onClose: () {
                         widget.cancelHideTimer();
                         widget.startHideTimer();
-                        playerController.canHidePlayerPanel = true;
+                        playerController.panel.canHidePlayerPanel = true;
                       },
                       builder: (BuildContext context, MenuController controller,
                           Widget? child) {
@@ -940,9 +950,9 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                             }
                           },
                           child: Text(
-                            playerController.playerSpeed == 1.0
+                            playerController.playback.playerSpeed == 1.0
                                 ? '倍速'
-                                : '${playerController.playerSpeed}x',
+                                : '${playerController.playback.playerSpeed}x',
                             style: const TextStyle(color: Colors.white),
                           ),
                         );
@@ -962,7 +972,9 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                                 child: Text(
                                   '${i}x',
                                   style: TextStyle(
-                                    color: i == playerController.playerSpeed
+                                    color: i ==
+                                            playerController
+                                                .playback.playerSpeed
                                         ? Theme.of(context).colorScheme.primary
                                         : null,
                                   ),
@@ -977,12 +989,12 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                       consumeOutsideTap: true,
                       onOpen: () {
                         widget.cancelHideTimer();
-                        playerController.canHidePlayerPanel = false;
+                        playerController.panel.canHidePlayerPanel = false;
                       },
                       onClose: () {
                         widget.cancelHideTimer();
                         widget.startHideTimer();
-                        playerController.canHidePlayerPanel = true;
+                        playerController.panel.canHidePlayerPanel = true;
                       },
                       builder: (BuildContext context, MenuController controller,
                           Widget? child) {
@@ -1004,8 +1016,8 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                       menuChildren: [
                         for (final entry in aspectRatioTypeMap.entries)
                           MenuItemButton(
-                            onPressed: () =>
-                                playerController.aspectRatioType = entry.key,
+                            onPressed: () => playerController
+                                .panel.aspectRatioType = entry.key,
                             child: Container(
                               height: 48,
                               constraints: BoxConstraints(minWidth: 112),
@@ -1015,7 +1027,8 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                                   entry.value,
                                   style: TextStyle(
                                     color: entry.key ==
-                                            playerController.aspectRatioType
+                                            playerController
+                                                .panel.aspectRatioType
                                         ? Theme.of(context).colorScheme.primary
                                         : null,
                                   ),
@@ -1079,7 +1092,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
           right: videoPageController.isFullscreen,
           child: MouseRegion(
             cursor: (videoPageController.isFullscreen &&
-                    !playerController.showVideoController)
+                    !playerController.panel.showVideoController)
                 ? SystemMouseCursors.none
                 : SystemMouseCursors.basic,
             onEnter: (_) {
@@ -1124,8 +1137,8 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                           await PipUtils.exitDesktopPIPWindow();
                         } else {
                           await PipUtils.enterDesktopPIPWindow(
-                            width: playerController.playerWidth,
-                            height: playerController.playerHeight,
+                            width: playerController.debug.playerWidth,
+                            height: playerController.debug.playerHeight,
                           );
                         }
                         videoPageController.isPip = !videoPageController.isPip;
@@ -1138,14 +1151,14 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                         return;
                       }
                       await PipUtils.updateAndroidPIPActions(
-                        playing: playerController.playing,
-                        danmakuEnabled: playerController.danmakuOn,
-                        width: playerController.playerWidth,
-                        height: playerController.playerHeight,
+                        playing: playerController.playback.playing,
+                        danmakuEnabled: playerController.danmaku.danmakuOn,
+                        width: playerController.debug.playerWidth,
+                        height: playerController.debug.playerHeight,
                       );
                       final bool entered = await PipUtils.enterAndroidPIPWindow(
-                        width: playerController.playerWidth,
-                        height: playerController.playerHeight,
+                        width: playerController.debug.playerWidth,
+                        height: playerController.debug.playerHeight,
                       );
                       if (!entered) {
                         KazumiDialog.showToast(message: '进入画中画失败');
@@ -1162,24 +1175,24 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                   bangumiItem: videoPageController.bangumiItem,
                   onOpen: () {
                     widget.cancelHideTimer();
-                    playerController.canHidePlayerPanel = false;
+                    playerController.panel.canHidePlayerPanel = false;
                   },
                   onClose: () {
                     widget.cancelHideTimer();
                     widget.startHideTimer();
-                    playerController.canHidePlayerPanel = true;
+                    playerController.panel.canHidePlayerPanel = true;
                   },
                 ),
                 MenuAnchor(
                   consumeOutsideTap: true,
                   onOpen: () {
                     widget.cancelHideTimer();
-                    playerController.canHidePlayerPanel = false;
+                    playerController.panel.canHidePlayerPanel = false;
                   },
                   onClose: () {
                     widget.cancelHideTimer();
                     widget.startHideTimer();
-                    playerController.canHidePlayerPanel = true;
+                    playerController.panel.canHidePlayerPanel = true;
                   },
                   builder: (BuildContext context, MenuController controller,
                       Widget? child) {
@@ -1227,7 +1240,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                     ),
                     MenuItemButton(
                       onPressed: () {
-                        bool needRestart = playerController.playing;
+                        bool needRestart = playerController.playback.playing;
                         playerController.pause();
                         RemotePlay()
                             .castVideo(playerController.videoUrl,
@@ -1249,7 +1262,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                     ),
                     MenuItemButton(
                       onPressed: () {
-                        playerController.lanunchExternalPlayer();
+                        playerController.launchExternalPlayer();
                       },
                       child: Container(
                         height: 48,
@@ -1353,7 +1366,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                             child: Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                  "当前房间: ${playerController.syncplayRoom == '' ? '未加入' : playerController.syncplayRoom}"),
+                                  "当前房间: ${playerController.syncplay.syncplayRoom == '' ? '未加入' : playerController.syncplay.syncplayRoom}"),
                             ),
                           ),
                         ),
@@ -1364,7 +1377,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                             child: Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                  "网络延时: ${playerController.syncplayClientRtt}ms"),
+                                  "网络延时: ${playerController.syncplay.syncplayClientRtt}ms"),
                             ),
                           ),
                         ),
@@ -1437,7 +1450,7 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
         child: Column(
           children: [
             const Spacer(),
-            (playerController.lockPanel)
+            (playerController.panel.lockPanel)
                 ? Container()
                 : IconButton(
                     icon: const Icon(
@@ -1451,14 +1464,15 @@ class _PlayerItemPanelState extends State<PlayerItemPanel> {
                   ),
             IconButton(
               icon: Icon(
-                playerController.lockPanel
+                playerController.panel.lockPanel
                     ? Icons.lock_outline
                     : Icons.lock_open,
                 color: Colors.white,
               ),
-              tooltip: playerController.lockPanel ? '解锁面板' : '锁定面板',
+              tooltip: playerController.panel.lockPanel ? '解锁面板' : '锁定面板',
               onPressed: () {
-                playerController.lockPanel = !playerController.lockPanel;
+                playerController.panel.lockPanel =
+                    !playerController.panel.lockPanel;
               },
             ),
             const Spacer(),
