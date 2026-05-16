@@ -34,8 +34,8 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Build Flutter APK (split per ABI)
-        run: flutter build apk --split-per-abi
+      - name: Build Flutter APK (fat, all ABIs)
+        run: flutter build apk
 
       - name: Download 1.9.4 APK for ARM64 libmpv
         run: |
@@ -43,36 +43,30 @@ jobs:
             "https://github.com/Predidit/Kazumi/releases/download/1.9.4/Kazumi_android_1.9.4.apk"
           unzip -o old_194.apk "lib/arm64-v8a/libmpv.so" "lib/arm64-v8a/libmediakitandroidhelper.so" -d old_libs/
 
-      - name: Swap ARM64 libmpv with 1.9.4 compatible version
+      - name: Swap ARM64 libmpv with 1.9.4 in fat APK
         run: |
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Kazumi_arm64.apk
-          zip -d Kazumi_arm64.apk lib/arm64-v8a/libmpv.so
-          zip -d Kazumi_arm64.apk lib/arm64-v8a/libmediakitandroidhelper.so
+          cp build/app/outputs/flutter-apk/app-release.apk Kazumi.apk
+          zip -d Kazumi.apk lib/arm64-v8a/libmpv.so
+          zip -d Kazumi.apk lib/arm64-v8a/libmediakitandroidhelper.so
           mkdir -p libswap/lib/arm64-v8a
           cp old_libs/lib/arm64-v8a/libmpv.so libswap/lib/arm64-v8a/
           cp old_libs/lib/arm64-v8a/libmediakitandroidhelper.so libswap/lib/arm64-v8a/
-          cd libswap && zip -r ../Kazumi_arm64.apk lib/ && cd ..
+          cd libswap && zip -r ../Kazumi.apk lib/ && cd ..
 
-      - name: Copy 32-bit APK
-        run: cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk Kazumi_arm32.apk
-
-      - name: Sign APKs
+      - name: Sign APK
         run: |
           keytool -genkey -v -keystore debug.keystore -alias debug \
             -keyalg RSA -keysize 2048 -validity 365 \
             -storepass android -keypass android \
             -dname "CN=Debug" -noprompt
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | head -1)
-          $APKSIGNER sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android Kazumi_arm64.apk
-          $APKSIGNER sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android Kazumi_arm32.apk
+          $APKSIGNER sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android Kazumi.apk
 
-      - name: Upload APKs
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Kazumi_APKs
-          path: |
-            Kazumi_arm64.apk
-            Kazumi_arm32.apk
+          name: Kazumi
+          path: Kazumi.apk
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -83,19 +77,18 @@ jobs:
             ## 基于 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) v2.1.1
 
             ### 新增支持
-            - 32位 ARM (armeabi-v7a) + 64位 ARM 双ABI
+            - 32位 ARM + 64位 ARM 双ABI通用包，自动匹配设备
             - Android 8.1 (SDK 27) 及以上老系统兼容
             - 骁龙450 / MT6765 等老SOC实测通过
             - 解锁特摄剧标签搜索（假面骑士、奥特曼等）
+            - 修复华为WebView设备部分视频源解析失败
 
             ### 修改内容
+            - 32位 + 64位双ABI同包
             - Android 11 及以下设备隐藏Vulkan选项，自动回退OpenGL
             - arm64 注入兼容版 libmpv，修复由于过老的SOC不适配的兼容性问题而导致的白屏
+            - 视频WebView页面加载后主动扫描已有iframe/video元素
             - 搜索支持特摄剧（假面骑士、奥特曼等）
-
-            ### 下载
-            - **Kazumi_arm64.apk** — 64位设备（含Android 8.1老SOC修复）
-            - **Kazumi_arm32.apk** — 32位设备
 
             ### 运行要求
             - 推荐 Android 8.1 (SDK 27) 及以上
@@ -103,15 +96,12 @@ jobs:
 
             ### 更新说明
             适配版不定时更新，跟随 Kazumi 上游主版本
-            老手机上遇到兼容性问题请提 Issue
 
             ### 问题反馈
             附上：设备型号 / Android版本及Kazumi内报错信息 / SOC型号 / 问题描述
 
             ### 鸣谢
             原项目 [Predidit/Kazumi](https://github.com/Predidit/Kazumi) · 弹幕服务 DanDanPlay API
-          files: |
-            Kazumi_arm64.apk
-            Kazumi_arm32.apk
+          files: Kazumi.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
